@@ -177,6 +177,33 @@
   .exp-btn{font-family:system-ui,sans-serif;font-size:.85rem;border:1px solid var(--line);background:var(--surface);
     border-radius:9px;padding:8px 14px;cursor:pointer;color:var(--ink);}
   .exp-btn:hover{border-color:var(--accent);}
+  .wp-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+  .wp-tab{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 18px;
+    font-family:inherit;font-size:.9rem;cursor:pointer;color:var(--muted);}
+  .wp-tab.on{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+  .wp-box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.3rem 1.5rem;}
+  .wp-prompt{font-size:1.1rem;line-height:1.7;margin-bottom:14px;}
+  .wp-blank{display:inline-block;border-bottom:2px solid var(--accent);min-width:90px;padding:0 6px;color:var(--accent);font-weight:700;}
+  .wp-blank.revealed{color:var(--ok);border-color:var(--ok);}
+  .wp-blank.wrong{color:var(--C2);border-color:var(--C2);}
+  .wp-hint{font-size:.88rem;color:var(--muted);font-style:italic;margin-bottom:10px;}
+  .wp-words{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px;}
+  .wp-word-chip{background:var(--C1bg);color:var(--C1);border-radius:999px;padding:6px 14px;
+    font-family:system-ui,sans-serif;font-size:.9rem;font-weight:600;border:none;}
+  .wp-input{width:100%;font-family:inherit;font-size:1rem;padding:11px 14px;border:1px solid var(--line);
+    border-radius:10px;background:var(--bg);color:var(--ink);}
+  .wp-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .wp-btn{font-family:inherit;font-size:.95rem;padding:10px 20px;border-radius:10px;cursor:pointer;
+    border:none;background:var(--accent);color:#fff;font-weight:600;}
+  .wp-btn.secondary{background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:400;}
+  .wp-result{margin-top:12px;padding:12px 16px;border-radius:10px;font-size:.95rem;
+    font-family:system-ui,sans-serif;}
+  .wp-result.ok{background:var(--A2bg);color:var(--ok);}
+  .wp-result.bad{background:var(--C2bg);color:var(--C2);}
+  .coll-row{display:flex;gap:10px;align-items:center;margin-bottom:8px;padding:8px 12px;background:var(--bg);border-radius:8px;}
+  .coll-pattern{font-weight:600;min-width:80px;color:var(--muted);font-size:.82rem;font-family:system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;}
+  .coll-example{flex:1;font-size:.96rem;}
+  .coll-example b{color:var(--accent);}
 </style>
 </head>
 <body>
@@ -240,6 +267,14 @@
     <button class="go" style="margin-top:0;" onclick="startStudy()">Start</button>
   </div>
   <div id="studyArea"></div>
+
+  <div class="section-title">Writing practice</div>
+  <div class="wp-tabs">
+    <button class="wp-tab on" id="wpClozeTab" onclick="wpSwitch('cloze')">Fill in the blank</button>
+    <button class="wp-tab" id="wpBuildTab" onclick="wpSwitch('build')">Sentence builder</button>
+    <button class="wp-tab" id="wpCollTab" onclick="wpSwitch('coll')">Collocations</button>
+  </div>
+  <div class="wp-box" id="wpBox"></div>
 
   <div class="section-title">Practice — write a sentence using any word</div>
   <textarea id="practice" placeholder="Write a sentence using a word you just learned…"></textarea>
@@ -695,6 +730,195 @@ function checkSentence(){
   fb.innerHTML=lines.map(([t,m])=>`<div class="fb-line fb-${t}">${t==="ok"?"✓":"•"} <span>${m}</span></div>`).join("");
 }
 
+// ===================== WRITING PRACTICE =====================
+let wpMode="cloze";
+function wpSwitch(m){
+  wpMode=m;
+  ["cloze","build","coll"].forEach(t=>document.getElementById("wp"+t.charAt(0).toUpperCase()+t.slice(1)+"Tab").classList.toggle("on",t===m));
+  if(m==="cloze")wpNewCloze();
+  else if(m==="build")wpNewBuild();
+  else wpNewColl();
+}
+
+// ----- Cloze deletion: hide target word in its example -----
+function wpPickClozeWord(){
+  // require a word with an example sentence that actually contains the word
+  const pool=BANK.concat(myWords).filter(x=>x.e&&x.e.toLowerCase().includes(x.w.toLowerCase().split(/[ /]/)[0]));
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+function wpNewCloze(){
+  const x=wpPickClozeWord();
+  if(!x){document.getElementById("wpBox").innerHTML='<p class="empty">No suitable words for cloze yet.</p>';return;}
+  const base=x.w.toLowerCase().split(/[ /]/)[0];
+  const re=new RegExp("\\b"+base+"[a-z]*","i");
+  const match=x.e.match(re);
+  const hidden=match?match[0]:base;
+  const blanked=x.e.replace(re,'<span class="wp-blank" id="wpBlank">_____</span>');
+  document.getElementById("wpBox").innerHTML=`
+    <div class="wp-hint">Fill in the missing word (${x.p}, ${x.l}):</div>
+    <div class="wp-prompt">${blanked}</div>
+    <div class="wp-hint" style="margin-top:4px;font-size:.82rem;">Hint: meaning — ${esc(x.d)}</div>
+    <input type="text" class="wp-input" id="wpAnswer" placeholder="Type the missing word..." onkeydown="if(event.key==='Enter')wpCheckCloze('${esc(hidden)}','${esc(x.w)}')" />
+    <div class="wp-actions">
+      <button class="wp-btn" onclick="wpCheckCloze('${esc(hidden)}','${esc(x.w)}')">Check</button>
+      <button class="wp-btn secondary" onclick="wpRevealCloze('${esc(hidden)}')">Show answer</button>
+      <button class="wp-btn secondary" onclick="wpNewCloze()">Next →</button>
+    </div>
+    <div id="wpResult"></div>`;
+  setTimeout(()=>{const a=document.getElementById("wpAnswer");if(a)a.focus();},50);
+}
+function wpCheckCloze(correct,word){
+  const ans=document.getElementById("wpAnswer").value.trim().toLowerCase();
+  const target=correct.toLowerCase();
+  const blank=document.getElementById("wpBlank");
+  const result=document.getElementById("wpResult");
+  if(!ans){result.innerHTML='<div class="wp-result bad">Type something first!</div>';return;}
+  if(ans===target||ans===word.toLowerCase()){
+    blank.textContent=correct;blank.classList.add("revealed");
+    result.innerHTML='<div class="wp-result ok">✓ Correct! Great job.</div>';
+    // mark as good in SRS
+    try{srsGrade(word.toLowerCase(),2);renderDashboard();}catch(e){}
+  }else{
+    blank.textContent=correct;blank.classList.add("wrong");
+    result.innerHTML=`<div class="wp-result bad">Not quite — the answer was <b>${esc(correct)}</b>.</div>`;
+    try{srsGrade(word.toLowerCase(),0);renderDashboard();}catch(e){}
+  }
+}
+function wpRevealCloze(correct){
+  const blank=document.getElementById("wpBlank");
+  if(blank){blank.textContent=correct;blank.classList.add("revealed");}
+  document.getElementById("wpResult").innerHTML='<div class="wp-result bad">Answer revealed — try the next one.</div>';
+}
+
+// ----- Sentence builder: combine 3 words in one sentence -----
+function wpNewBuild(){
+  const pool=BANK.concat(myWords).filter(x=>["B1","B2","C1","Academic"].includes(x.l)||x.awl);
+  const picks=[];const used=new Set();
+  while(picks.length<3&&picks.length<pool.length){
+    const p=pool[Math.floor(Math.random()*pool.length)];
+    if(!used.has(p.w)){used.add(p.w);picks.push(p);}
+  }
+  if(picks.length<3){document.getElementById("wpBox").innerHTML='<p class="empty">Need more words first.</p>';return;}
+  document.getElementById("wpBox").innerHTML=`
+    <div class="wp-hint">Write ONE sentence that uses all three words below:</div>
+    <div class="wp-words">${picks.map(p=>`<span class="wp-word-chip">${esc(p.w)}</span>`).join("")}</div>
+    <div class="wp-hint" style="font-size:.82rem;">
+      ${picks.map(p=>`<b>${esc(p.w)}</b> — ${esc(p.d.slice(0,55))}${p.d.length>55?'…':''}`).join("<br>")}
+    </div>
+    <textarea class="wp-input" id="wpBuildAns" rows="3" placeholder="Write your sentence..." style="margin-top:10px;"></textarea>
+    <div class="wp-actions">
+      <button class="wp-btn" onclick='wpCheckBuild(${JSON.stringify(JSON.stringify(picks.map(p=>p.w)))})'>Check</button>
+      <button class="wp-btn secondary" onclick="wpNewBuild()">New words →</button>
+    </div>
+    <div id="wpResult"></div>`;
+}
+function wpCheckBuild(jsonWords){
+  const words=JSON.parse(jsonWords);
+  const ans=document.getElementById("wpBuildAns").value.trim();
+  const result=document.getElementById("wpResult");
+  if(!ans){result.innerHTML='<div class="wp-result bad">Write your sentence first!</div>';return;}
+  const lower=ans.toLowerCase();
+  const used=words.filter(w=>lower.includes(w.toLowerCase().split(/[ /]/)[0]));
+  const missing=words.filter(w=>!lower.includes(w.toLowerCase().split(/[ /]/)[0]));
+  const wc=ans.split(/\s+/).length;
+  const cap=/^[A-Z]/.test(ans);
+  const end=/[.!?]$/.test(ans);
+  let lines=[];
+  if(used.length===3)lines.push(`<div class="wp-result ok">✓ All three words used: ${used.map(w=>"<b>"+esc(w)+"</b>").join(", ")}</div>`);
+  else lines.push(`<div class="wp-result bad">Missing: ${missing.map(w=>"<b>"+esc(w)+"</b>").join(", ")}</div>`);
+  let extra=[];
+  if(!cap)extra.push("Start with a capital letter.");
+  if(!end)extra.push("End with a full stop (.).");
+  if(wc<8)extra.push(`Try a longer sentence — yours is ${wc} words.`);
+  else if(wc>50)extra.push(`Very long (${wc} words) — split into two sentences?`);
+  if(extra.length)lines.push(`<div class="wp-result bad">${extra.join(" ")}</div>`);
+  else if(used.length===3)lines.push(`<div class="wp-result ok">Nice work — ${wc} words, well-formed.</div>`);
+  // SRS reward: if all three used correctly, mark each as Good
+  if(used.length===3){try{used.forEach(w=>srsGrade(w.toLowerCase(),2));renderDashboard();}catch(e){}}
+  result.innerHTML=lines.join("");
+}
+
+// ----- Collocations: common word partnerships -----
+// Built-in patterns for common IELTS words. Falls back to dictionary lookup.
+const COLLOCATIONS={
+  "make":["make a decision","make progress","make an effort","make a difference","make a mistake"],
+  "do":["do research","do business","do homework","do a favour","do damage"],
+  "take":["take action","take place","take advantage","take responsibility","take into account"],
+  "have":["have an impact","have access","have an opportunity","have an effect","have a tendency"],
+  "pay":["pay attention","pay a visit","pay tribute","pay a price","pay a compliment"],
+  "decision":["make a decision","reach a decision","reverse a decision","crucial decision","informed decision"],
+  "research":["conduct research","carry out research","research suggests","groundbreaking research","extensive research"],
+  "effect":["have an effect","adverse effect","profound effect","side effect","take effect"],
+  "impact":["have an impact","significant impact","negative impact","environmental impact","make an impact"],
+  "problem":["solve a problem","face a problem","tackle a problem","pose a problem","serious problem"],
+  "issue":["raise an issue","address an issue","tackle an issue","controversial issue","key issue"],
+  "solution":["find a solution","propose a solution","viable solution","long-term solution","practical solution"],
+  "opportunity":["seize an opportunity","golden opportunity","equal opportunity","miss an opportunity","provide an opportunity"],
+  "experience":["gain experience","rich experience","traumatic experience","first-hand experience","valuable experience"],
+  "attention":["pay attention","draw attention","attract attention","undivided attention","close attention"],
+  "factor":["key factor","contributing factor","crucial factor","decisive factor","major factor"],
+  "role":["play a role","crucial role","key role","major role","leading role"],
+  "effort":["make an effort","joint effort","considerable effort","worthwhile effort","sustained effort"],
+  "interest":["take an interest","arouse interest","vested interest","public interest","keen interest"],
+  "advantage":["take advantage","competitive advantage","clear advantage","main advantage","gain an advantage"],
+  "result":["positive result","achieve results","yield results","direct result","produce results"],
+  "evidence":["provide evidence","compelling evidence","strong evidence","empirical evidence","conclusive evidence"],
+  "increase":["sharp increase","significant increase","steady increase","dramatic increase","slight increase"],
+  "decrease":["sharp decrease","significant decrease","gradual decrease","steady decrease","slight decrease"],
+  "change":["dramatic change","fundamental change","gradual change","positive change","undergo change"],
+  "growth":["rapid growth","steady growth","sustainable growth","economic growth","exponential growth"],
+  "development":["sustainable development","economic development","rapid development","further development","key development"],
+  "education":["higher education","quality education","compulsory education","formal education","further education"],
+  "knowledge":["gain knowledge","extensive knowledge","in-depth knowledge","specialised knowledge","prior knowledge"],
+  "information":["gather information","provide information","valuable information","detailed information","sensitive information"],
+  "skill":["develop skills","essential skills","communication skills","practical skills","master a skill"],
+  "ability":["develop the ability","innate ability","natural ability","exceptional ability","demonstrate the ability"],
+  "responsibility":["take responsibility","share responsibility","accept responsibility","heavy responsibility","moral responsibility"],
+  "challenge":["face a challenge","major challenge","rise to the challenge","pose a challenge","overcome a challenge"],
+  "risk":["take a risk","high risk","reduce the risk","minimise the risk","at risk"],
+  "benefit":["enjoy the benefits","reap the benefits","mutual benefit","health benefits","provide benefits"],
+  "concern":["raise concerns","express concern","growing concern","main concern","cause for concern"],
+  "argument":["strong argument","compelling argument","valid argument","raise an argument","counter-argument"],
+  "opinion":["form an opinion","express an opinion","public opinion","informed opinion","strong opinion"],
+  "view":["express a view","hold a view","point of view","balanced view","widely-held view"],
+};
+const COLL_PATTERNS={"V+N":"verb + noun","A+N":"adjective + noun","N+N":"noun + noun"};
+
+function wpPickCollWord(){
+  const keys=Object.keys(COLLOCATIONS);
+  return keys[Math.floor(Math.random()*keys.length)];
+}
+function detectPattern(coll,word){
+  // crude: if word is first → V+N or A+N; very simple
+  const parts=coll.split(" ");
+  const idx=parts.findIndex(p=>p.toLowerCase().startsWith(word.toLowerCase().slice(0,4)));
+  return idx===0?"V+N":idx>0?"A+N":"N+N";
+}
+function wpNewColl(){
+  const word=wpPickCollWord();
+  const list=COLLOCATIONS[word];
+  const item=BANK.find(b=>b.w===word)||{w:word,d:"common English word",l:""};
+  document.getElementById("wpBox").innerHTML=`
+    <div class="wp-hint">Common partners for <b style="color:var(--accent);font-size:1.1rem;">${esc(word)}</b> — learn these to sound native:</div>
+    <div style="margin-top:14px;">
+      ${list.map(c=>{
+        const pat=detectPattern(c,word);
+        const re=new RegExp("("+word+"[a-z]*)","gi");
+        const highlighted=c.replace(re,"<b>$1</b>");
+        return `<div class="coll-row"><span class="coll-pattern">${COLL_PATTERNS[pat]||""}</span><span class="coll-example">${highlighted}</span></div>`;
+      }).join("")}
+    </div>
+    <div class="wp-hint" style="margin-top:14px;font-size:.85rem;">
+      💡 IELTS examiners reward correct collocations — they show natural English fluency.
+    </div>
+    <div class="wp-actions">
+      <button class="wp-btn" onclick="wpNewColl()">Different word →</button>
+    </div>`;
+}
+
+// init writing practice on load
+function wpInit(){wpNewCloze();}
+
 // ---------- dark / light theme ----------
 function toggleTheme(){
   const cur=document.documentElement.getAttribute("data-theme");
@@ -714,7 +938,7 @@ function toggleTheme(){
   }catch(e){}
 })();
 
-wordOfDay();render();renderDashboard();
+wordOfDay();render();renderDashboard();wpInit();
 </script>
 <div class="overlay hidden" id="overlay" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal"></div>
