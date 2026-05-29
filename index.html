@@ -204,6 +204,26 @@
   .coll-pattern{font-weight:600;min-width:80px;color:var(--muted);font-size:.82rem;font-family:system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;}
   .coll-example{flex:1;font-size:.96rem;}
   .coll-example b{color:var(--accent);}
+  .vt-question{font-size:1.15rem;line-height:1.7;margin-bottom:12px;}
+  .vt-blank{display:inline-block;border-bottom:2px dashed var(--accent);min-width:80px;
+    text-align:center;padding:0 8px;color:var(--accent);font-weight:700;}
+  .vt-options{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:14px 0;}
+  .vt-opt{font-family:inherit;font-size:1rem;padding:12px;border-radius:10px;cursor:pointer;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;}
+  .vt-opt:hover{border-color:var(--accent);}
+  .vt-opt.correct{background:var(--A2bg);color:var(--ok);border-color:transparent;}
+  .vt-opt.wrong{background:var(--C2bg);color:var(--C2);border-color:transparent;}
+  .vt-opt:disabled{cursor:default;}
+  .vt-mode-row{display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;}
+  .vt-mode-row label{font-size:.85rem;color:var(--muted);font-family:system-ui,sans-serif;}
+  .vt-mode-row .seg button{padding:6px 14px;font-size:.85rem;}
+  .vt-explain{margin-top:12px;padding:14px 16px;border-radius:10px;background:var(--bg);font-size:.94rem;}
+  .vt-explain .vt-sg{color:var(--C1);font-weight:600;display:block;font-family:system-ui,sans-serif;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
+  .vt-explain .vt-fm{color:var(--ok);font-weight:600;display:block;font-family:system-ui,sans-serif;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;}
+  .vt-explain .vt-rs{color:var(--accent);font-weight:600;display:block;font-family:system-ui,sans-serif;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;}
+  .vt-explain .vt-line{margin-bottom:4px;}
+  .vt-score{text-align:center;padding:1rem;}
+  .vt-score .big{font-size:2.4rem;font-weight:700;}
 </style>
 </head>
 <body>
@@ -273,6 +293,7 @@
     <button class="wp-tab on" id="wpClozeTab" onclick="wpSwitch('cloze')">Fill in the blank</button>
     <button class="wp-tab" id="wpBuildTab" onclick="wpSwitch('build')">Sentence builder</button>
     <button class="wp-tab" id="wpCollTab" onclick="wpSwitch('coll')">Collocations</button>
+    <button class="wp-tab" id="wpVerbTab" onclick="wpSwitch('verb')">Verb forms</button>
   </div>
   <div class="wp-box" id="wpBox"></div>
 
@@ -730,14 +751,172 @@ function checkSentence(){
   fb.innerHTML=lines.map(([t,m])=>`<div class="fb-line fb-${t}">${t==="ok"?"✓":"•"} <span>${m}</span></div>`).join("");
 }
 
+// ===================== VERB FORM TRAINER =====================
+// Question bank covering: base form, 3rd-person -s, past -ed, present continuous,
+// passive, gerund, future, present perfect.
+// Each item: prompt with ___, correct, distractors, singlish version, formal note, reason.
+const VERB_QS=[
+  // ----- present habit / general truth (base form & -s) -----
+  {q:"Every morning, I ___ English vocabulary for an hour.",a:"study",opts:["study","studies","studied","studying"],
+   sg:"Every morning I study English vocab one hour.",fm:"Every morning, I study English vocabulary for an hour.",
+   rs:"Habit / routine → base form for 'I'. No -s, no -ed."},
+  {q:"She ___ the dictionary every day.",a:"uses",opts:["use","uses","used","using"],
+   sg:"She use the dictionary everyday.",fm:"She uses the dictionary every day.",
+   rs:"Present habit + 'she' → must add -s. (he/she/it always takes -s in present tense.)"},
+  {q:"My brother ___ in Singapore now.",a:"works",opts:["work","works","worked","working"],
+   sg:"My brother work in Singapore now.",fm:"My brother works in Singapore.",
+   rs:"'My brother' = he → present tense needs -s."},
+  {q:"They ___ to study abroad next year.",a:"plan",opts:["plan","plans","planned","planning"],
+   sg:"They plan to study oversea next year.",fm:"They plan to study abroad next year.",
+   rs:"'They' is plural → base form, no -s."},
+  // ----- past simple (-ed) -----
+  {q:"Yesterday I ___ the app for two hours.",a:"used",opts:["use","uses","used","using"],
+   sg:"Yesterday I use the app for two hours.",fm:"Yesterday I used the app for two hours.",
+   rs:"'Yesterday' = finished past → must add -ed."},
+  {q:"Last week she ___ a new word every day.",a:"learned",opts:["learn","learns","learned","learning"],
+   sg:"Last week she learn one new word everyday.",fm:"Last week she learned a new word every day.",
+   rs:"'Last week' = finished past → past form (-ed)."},
+  {q:"In 2023, the company ___ over 500 employees.",a:"hired",opts:["hire","hires","hired","hiring"],
+   sg:"In 2023 the company hire over 500 employee.",fm:"In 2023, the company hired over 500 employees.",
+   rs:"A specific past year → past simple (-ed). Also: employees needs -s for plural."},
+  {q:"They ___ the exam last Friday.",a:"took",opts:["take","takes","took","taking"],
+   sg:"They take the exam last Friday.",fm:"They took the exam last Friday.",
+   rs:"'Last Friday' = past → 'take' is irregular: take → took."},
+  // ----- present continuous (am/is/are + -ing) -----
+  {q:"I am ___ my IELTS vocabulary right now.",a:"building",opts:["build","builds","built","building"],
+   sg:"I building my IELTS vocab now.",fm:"I am building my IELTS vocabulary right now.",
+   rs:"'Right now' + 'am' → continuous form needs -ing. Don't drop the 'am'."},
+  {q:"She is ___ for the test at the moment.",a:"preparing",opts:["prepare","prepares","prepared","preparing"],
+   sg:"She prepare for the test now.",fm:"She is preparing for the test at the moment.",
+   rs:"Action happening now → 'is' + verb-ing. Both parts are needed."},
+  {q:"We are ___ how to use English in daily life.",a:"learning",opts:["learn","learns","learned","learning"],
+   sg:"We learn how to use English in daily life.",fm:"We are learning how to use English in daily life.",
+   rs:"Ongoing process → 'are' + learning."},
+  // ----- passive voice -----
+  {q:"This word is ___ in academic writing.",a:"used",opts:["use","uses","used","using"],
+   sg:"This word always use in academic writing.",fm:"This word is used in academic writing.",
+   rs:"Passive: 'is' + past participle (-ed). The word receives the action, not does it."},
+  {q:"English is ___ by millions of people in Singapore.",a:"spoken",opts:["speak","speaks","spoke","spoken"],
+   sg:"English speak by many people in Singapore.",fm:"English is spoken by millions of people in Singapore.",
+   rs:"Passive: 'is' + past participle. 'speak' → spoken (irregular)."},
+  {q:"The book ___ written by a famous author.",a:"was",opts:["is","was","were","being"],
+   sg:"The book write by a famous author.",fm:"The book was written by a famous author.",
+   rs:"Passive past: 'was/were' + past participle. Singular subject → was."},
+  // ----- after 'to' (infinitive) -----
+  {q:"I want to ___ better English by next year.",a:"speak",opts:["speak","speaks","spoke","speaking"],
+   sg:"I want speak better English next year.",fm:"I want to speak better English by next year.",
+   rs:"After 'to' always use the base form. Never 'to speaks' or 'to spoke'."},
+  {q:"It is important to ___ vocabulary daily.",a:"practise",opts:["practise","practises","practised","practising"],
+   sg:"Important to practise vocab everyday.",fm:"It is important to practise vocabulary daily.",
+   rs:"After 'to' → base form. Also notice the 'It is' subject is needed in formal English."},
+  // ----- gerund (-ing as noun) -----
+  {q:"___ English every day improves your fluency.",a:"Using",opts:["Use","Uses","Used","Using"],
+   sg:"Use English everyday will improve fluency.",fm:"Using English every day improves your fluency.",
+   rs:"Verb at the start of a sentence (as subject) → -ing form (gerund)."},
+  {q:"I enjoy ___ new words in conversation.",a:"using",opts:["use","uses","used","using"],
+   sg:"I enjoy to use new words when talk.",fm:"I enjoy using new words in conversation.",
+   rs:"After 'enjoy', 'avoid', 'finish', 'like', 'love' → use -ing form, not 'to + verb'."},
+  // ----- present perfect (have/has + past participle) -----
+  {q:"I ___ already finished my homework.",a:"have",opts:["have","has","had","having"],
+   sg:"I already finish my homework.",fm:"I have already finished my homework.",
+   rs:"Present perfect: action done that affects now → 'have/has' + past participle. 'Already' is a clue."},
+  {q:"She ___ lived in Malaysia for five years.",a:"has",opts:["have","has","had","having"],
+   sg:"She live in Malaysia already five years.",fm:"She has lived in Malaysia for five years.",
+   rs:"'For 5 years' (still ongoing) → present perfect. 'She' (3rd person) → 'has'."},
+  {q:"We ___ never been to London before.",a:"have",opts:["have","has","had","having"],
+   sg:"We never go London before.",fm:"We have never been to London before.",
+   rs:"Life experience up to now → present perfect. 'Never' + 'before' are strong clues."},
+  // ----- future -----
+  {q:"Tomorrow I ___ meet my teacher at 9 a.m.",a:"will",opts:["will","am","was","have"],
+   sg:"Tomorrow I go meet my teacher 9am.",fm:"Tomorrow I will meet my teacher at 9 a.m.",
+   rs:"Future action → 'will' + base verb. Or: 'am going to meet' for planned future."},
+  {q:"Next month she ___ going to start a new course.",a:"is",opts:["is","are","was","has"],
+   sg:"Next month she start new course.",fm:"Next month she is going to start a new course.",
+   rs:"Planned future → 'is/are going to' + base verb. 'She' → is."},
+  // ----- 'there is / there are' (replacing Singlish 'got') -----
+  {q:"___ many ways to improve your vocabulary.",a:"There are",opts:["There are","There is","Got","Have"],
+   sg:"Got many ways to improve your vocabulary.",fm:"There are many ways to improve your vocabulary.",
+   rs:"Plural noun ('ways') → 'There are'. 'Got' is conversational only — IELTS needs 'There is/are'."},
+  {q:"___ a serious problem with the system.",a:"There is",opts:["There is","There are","Got","Have"],
+   sg:"Got serious problem with the system.",fm:"There is a serious problem with the system.",
+   rs:"Singular noun ('a problem') → 'There is'. Always include the article 'a'."},
+];
+
+let vtIdx=0,vtScore=0,vtTotal=5,vtBilingual=true,vtQueue=[];
+
+function shuffleArr(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+function wpNewVerb(){
+  vtIdx=0;vtScore=0;
+  vtQueue=shuffleArr(VERB_QS).slice(0,vtTotal);
+  // load bilingual preference
+  try{vtBilingual=localStorage.getItem("ielts_vt_bi")!=="0";}catch(e){}
+  vtRender();
+}
+function vtToggleBi(){
+  vtBilingual=!vtBilingual;
+  try{localStorage.setItem("ielts_vt_bi",vtBilingual?"1":"0");}catch(e){}
+  vtRender();
+}
+function vtRender(){
+  if(vtIdx>=vtQueue.length){vtFinish();return;}
+  const q=vtQueue[vtIdx];
+  const prompt=q.q.replace("___",'<span class="vt-blank">___</span>');
+  const opts=shuffleArr(q.opts);
+  document.getElementById("wpBox").innerHTML=`
+    <div class="vt-mode-row">
+      <label>Question ${vtIdx+1} of ${vtQueue.length}</label>
+      <span class="seg" style="margin-left:auto;">
+        <button class="${vtBilingual?'on':''}" onclick="if(!${vtBilingual})vtToggleBi()">Bilingual</button>
+        <button class="${!vtBilingual?'on':''}" onclick="if(${vtBilingual})vtToggleBi()">Formal only</button>
+      </span>
+    </div>
+    <div class="vt-question">${prompt}</div>
+    <div class="vt-options" id="vtOpts">
+      ${opts.map(o=>`<button class="vt-opt" onclick='vtAnswer(this,${JSON.stringify(o===q.a)})'>${esc(o)}</button>`).join("")}
+    </div>
+    <div id="vtFeedback"></div>`;
+}
+function vtAnswer(btn,correct){
+  const q=vtQueue[vtIdx];
+  document.querySelectorAll("#vtOpts .vt-opt").forEach(b=>{
+    b.disabled=true;
+    if(b.textContent===q.a)b.classList.add("correct");
+  });
+  if(correct){vtScore++;}
+  else{btn.classList.add("wrong");}
+  let explain=`<div class="vt-explain">`;
+  if(vtBilingual){
+    explain+=`<span class="vt-sg">🇸🇬 Singlish</span><div class="vt-line">${esc(q.sg)}</div>`;
+    explain+=`<span class="vt-fm">🇬🇧 Formal English</span><div class="vt-line">${esc(q.fm)}</div>`;
+  }else{
+    explain+=`<span class="vt-fm">🇬🇧 Formal English</span><div class="vt-line">${esc(q.fm)}</div>`;
+  }
+  explain+=`<span class="vt-rs">Why?</span><div class="vt-line">${esc(q.rs)}</div></div>`;
+  explain+=`<div class="wp-actions"><button class="wp-btn" onclick="vtNext()">Next →</button></div>`;
+  document.getElementById("vtFeedback").innerHTML=explain;
+}
+function vtNext(){vtIdx++;vtRender();}
+function vtFinish(){
+  const pct=Math.round(vtScore/vtQueue.length*100);
+  document.getElementById("wpBox").innerHTML=`
+    <div class="vt-score">
+      <div class="big">${vtScore} / ${vtQueue.length}</div>
+      <p class="meaning">${pct}% correct on verb forms</p>
+      <p class="meaning" style="font-size:.85rem;">Keep practising — pay attention to the "Why?" tips!</p>
+      <button class="wp-btn" onclick="wpNewVerb()">Try again</button>
+    </div>`;
+}
+
 // ===================== WRITING PRACTICE =====================
 let wpMode="cloze";
 function wpSwitch(m){
   wpMode=m;
-  ["cloze","build","coll"].forEach(t=>document.getElementById("wp"+t.charAt(0).toUpperCase()+t.slice(1)+"Tab").classList.toggle("on",t===m));
+  ["cloze","build","coll","verb"].forEach(t=>document.getElementById("wp"+t.charAt(0).toUpperCase()+t.slice(1)+"Tab").classList.toggle("on",t===m));
   if(m==="cloze")wpNewCloze();
   else if(m==="build")wpNewBuild();
-  else wpNewColl();
+  else if(m==="coll")wpNewColl();
+  else wpNewVerb();
 }
 
 // ----- Cloze deletion: hide target word in its example -----
